@@ -6,24 +6,55 @@ use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 use tokio;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 
 #[derive(Debug, Clone)]
-struct DataStore(Arc<Mutex<HashMap<String, String>>>);
+struct DataValue {
+    value: String,
+    expires_at: Option<SystemTime>,
+}
+
+#[derive(Debug, Clone)]
+struct DataStore(Arc<Mutex<HashMap<String, DataValue>>>);
 
 impl DataStore {
     pub fn new() -> Self {
         Self(Arc::new(Mutex::new(HashMap::new())))
     }
 
-    pub async fn set(&self, key: String, value: String) -> Option<String> {
-        self.0.clone().lock_owned().await.insert(key, value)
+    pub async fn set(
+        &self,
+        key: String,
+        value: String,
+        expires_at: Option<SystemTime>,
+    ) -> Option<String> {
+        let now = SystemTime::now();
+
+        self.0
+            .clone()
+            .lock_owned()
+            .await
+            .insert(key, DataValue { value, expires_at })
+            .and_then(|v| match v.expires_at {
+                Some(expires_at) if expires_at <= now => None,
+                _ => Some(v.value),
+            })
     }
 
     pub async fn get(&self, key: &str) -> Option<String> {
-        self.0.lock().await.get(key).map(|v| v.clone())
+        let now = SystemTime::now();
+
+        self.0
+            .lock()
+            .await
+            .get(key)
+            .and_then(|v| match v.expires_at {
+                Some(expires_at) if expires_at <= now => None,
+                _ => Some(v.value.clone()),
+            })
     }
 }
 
@@ -99,7 +130,17 @@ impl Client {
         let key = args.next().ok_or(Error::MissingArgument("set", "key"))?;
         let value = args.next().ok_or(Error::MissingArgument("set", "value"))?;
 
-        self.store.set(key, value).await;
+        let expires_at = match (
+            args.next().map(|v| v.to_ascii_lowercase()),
+            args.next().and_then(|v| v.parse::<u64>().ok()),
+        ) {
+            (Some(cmd), Some(arg)) if cmd == "px" => {
+                Some(SystemTime::now() + Duration::from_millis(arg))
+            }
+            _ => None,
+        };
+
+        self.store.set(key, value, expires_at).await;
         Type::SimpleString("OK".into())
             .write(&mut self.stream)
             .await
