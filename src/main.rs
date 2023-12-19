@@ -58,8 +58,7 @@ impl Client {
     }
 
     async fn read_command(&mut self) -> Result<Vec<String>> {
-        let mut pinned = std::pin::Pin::new(&mut self.0);
-        let parsed = Type::parse(&mut pinned).await.context("Parsing command")?;
+        let parsed = Type::parse(&mut std::pin::Pin::new(&mut self.0)).await.context("Parsing command")?;
         if let Type::Array(cmds) = parsed {
             let ret = cmds
                 .into_iter()
