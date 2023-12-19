@@ -121,7 +121,7 @@ impl Client {
         self.store
             .get(&key)
             .await
-            .map_or(Type::Null, |s| Type::BulkString(s))
+            .map_or(Type::NullString, |s| Type::BulkString(s))
             .write(&mut self.stream)
             .await
     }
