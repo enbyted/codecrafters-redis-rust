@@ -1,4 +1,4 @@
-use std::{str::Utf8Error, num::ParseIntError};
+use std::{num::ParseIntError, str::Utf8Error};
 
 use thiserror::{self, Error};
 
@@ -27,6 +27,9 @@ pub enum Error {
     Unimplemented,
     #[error("Unimplemented command '{0}'")]
     UnimplementedCommand(String),
+
+    #[error("Missing argument {1} in {0} command")]
+    MissingArgument(&'static str, &'static str),
 }
 
 pub trait WithContext<T, E> {
