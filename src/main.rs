@@ -41,7 +41,8 @@ impl Client {
             eprintln!("Received CMD: {:?}", &cmd);
 
             let mut iter = cmd.iter();
-            match iter.next().map(|s| s.as_str()) {
+            let cmd = iter.next().map(|s| s.as_str());
+            match cmd {
                 Some("ping") => {
                     let reply = if let Some(arg) = iter.next() {
                         Type::BulkString(arg.clone())
@@ -51,6 +52,11 @@ impl Client {
 
                     reply.write(&mut self.0).await?;
                 }
+                Some("echo") => {
+                    let reply = iter.next().map(|v| v.clone()).unwrap_or_default();
+
+                    Type::BulkString(reply).write(&mut self.0).await?;
+                }
                 Some(cmd) => return Err(Error::UnimplementedCommand(cmd.into())),
                 None => todo!(),
             }
@@ -58,7 +64,9 @@ impl Client {
     }
 
     async fn read_command(&mut self) -> Result<Vec<String>> {
-        let parsed = Type::parse(&mut std::pin::Pin::new(&mut self.0)).await.context("Parsing command")?;
+        let parsed = Type::parse(&mut std::pin::Pin::new(&mut self.0))
+            .await
+            .context("Parsing command")?;
         if let Type::Array(cmds) = parsed {
             let ret = cmds
                 .into_iter()
