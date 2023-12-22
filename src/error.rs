@@ -30,6 +30,25 @@ pub enum Error {
 
     #[error("Missing argument {1} in {0} command")]
     MissingArgument(&'static str, &'static str),
+
+    #[error("Parse error {0:?}")]
+    ParseError(nom::Err<nom::error::Error<Vec<u8>>>),
+}
+
+impl From<nom::Err<nom::error::Error<&[u8]>>> for Error {
+    fn from(value: nom::Err<nom::error::Error<&[u8]>>) -> Self {
+        match value {
+            nom::Err::Incomplete(needed) => Self::ParseError(nom::Err::Incomplete(needed)),
+            nom::Err::Error(err) => Self::ParseError(nom::Err::Error(nom::error::Error::new(
+                err.input.to_vec(),
+                err.code,
+            ))),
+            nom::Err::Failure(err) => Self::ParseError(nom::Err::Failure(nom::error::Error::new(
+                err.input.to_vec(),
+                err.code,
+            ))),
+        }
+    }
 }
 
 pub trait WithContext<T, E> {

@@ -1,16 +1,16 @@
 use anyhow;
 use redis_starter_rust::error::{Error, WithContext};
 use redis_starter_rust::resp::Type;
-use redis_starter_rust::Result;
+use redis_starter_rust::{rdb, Result};
 use std::collections::HashMap;
-use std::env;
 use std::error::Error as StdError;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use tokio;
+use std::{env, io, path};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
+use tokio::{self, fs};
 
 #[derive(Debug, Clone)]
 struct DataValue {
@@ -19,17 +19,33 @@ struct DataValue {
 }
 
 #[derive(Debug, Clone)]
-struct DataStore{
+struct DataStore {
     data: Arc<Mutex<HashMap<String, DataValue>>>,
     config: Arc<HashMap<String, String>>,
 }
 
 impl DataStore {
     pub fn new(config: HashMap<String, String>) -> Self {
-        Self{
+        Self {
             data: Arc::new(Mutex::new(HashMap::new())),
             config: Arc::new(config),
         }
+    }
+
+    pub async fn load_from_rdb(&mut self) -> Result<()> {
+        match (self.config.get("dir"), self.config.get("dbfilename")) {
+            (Some(dir), Some(file)) => {
+                let path = path::Path::new(dir).join(file);
+                let data = fs::read(path).await?;
+
+                let parsed = rdb::Database::parse(&data)?;
+                todo!()
+            }
+            (Some(_), None) => eprintln!("Not loading database, `dbfilename` not provided"),
+            (None, Some(_)) => eprintln!("Not loading database, `dir` not provided"),
+            (None, None) => eprintln!("Not loading database, `dir` and `dbfilename` not provided"),
+        }
+        Ok(())
     }
 
     pub async fn set(
@@ -137,11 +153,16 @@ impl Client {
     }
 
     async fn handle_config_get(&mut self, mut args: impl Iterator<Item = String>) -> Result<()> {
-        let key = args.next().ok_or(Error::MissingArgument("config get", "key"))?.to_ascii_lowercase();
+        let key = args
+            .next()
+            .ok_or(Error::MissingArgument("config get", "key"))?
+            .to_ascii_lowercase();
 
         self.store
             .get_config(&key)
-            .map_or(Type::NullString, |s| Type::Array(vec![Type::BulkString(key), Type::BulkString(s.into())]))
+            .map_or(Type::NullString, |s| {
+                Type::Array(vec![Type::BulkString(key), Type::BulkString(s.into())])
+            })
             .write(&mut self.stream)
             .await
     }
@@ -220,12 +241,12 @@ impl Client {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let mut config = HashMap::new();
-    let args : Vec<_> = env::args().skip(1).collect();
+    let args: Vec<_> = env::args().skip(1).collect();
 
     for val in args.chunks_exact(2) {
         let key = &val[0];
         let value = val[1].trim();
-        if ! key.starts_with("--") {
+        if !key.starts_with("--") {
             eprintln!("Invalid config option {key}");
             anyhow::bail!("Arugment parsing failed");
         }
@@ -239,7 +260,9 @@ async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind(address).await?;
     eprintln!("Listening on {address}");
 
-    let store = DataStore::new(config);
+    let mut store = DataStore::new(config);
+    eprintln!("Trying to read data from persistent store");
+    store.load_from_rdb().await?;
 
     loop {
         let (stream, addr) = listener.accept().await?;
