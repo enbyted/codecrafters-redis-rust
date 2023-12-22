@@ -1,4 +1,4 @@
-use std::{num::ParseIntError, str::Utf8Error};
+use std::{fmt::Display, num::ParseIntError, str::Utf8Error};
 
 use thiserror::{self, Error};
 
@@ -8,7 +8,7 @@ use crate::resp::Type;
 pub enum Error {
     #[error("I/O error")]
     AsyncIoError(#[from] tokio::io::Error),
-    #[error("Context: {0}")]
+    #[error("{0}")]
     Context(String, #[source] Box<Error>),
 
     #[error("Invalid UTF-8 sequence")]
@@ -35,6 +35,12 @@ pub enum Error {
     ParseError(nom::Err<nom::error::Error<Vec<u8>>>),
 }
 
+impl Error {
+    pub fn with_trace(&self) -> PrintTrace<'_> {
+        PrintTrace(self)
+    }
+}
+
 impl From<nom::Err<nom::error::Error<&[u8]>>> for Error {
     fn from(value: nom::Err<nom::error::Error<&[u8]>>) -> Self {
         match value {
@@ -58,5 +64,27 @@ pub trait WithContext<T, E> {
 impl<T> WithContext<T, Error> for std::result::Result<T, Error> {
     fn context(self, context: &str) -> Self {
         self.map_err(|err| Error::Context(context.into(), Box::new(err)))
+    }
+}
+
+pub struct PrintTrace<'a>(&'a Error);
+
+impl Display for PrintTrace<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{}", self.0))?;
+
+        if let Some(cause) = std::error::Error::source(self.0) {
+            f.write_str("\nCaused by:\n")?;
+            let mut cause = Some(cause);
+            loop {
+                if let Some(err) = cause {
+                    f.write_fmt(format_args!("  {err}"))?;
+                    cause = err.source();
+                } else {
+                    break;
+                }
+            }
+        }
+        Ok(())
     }
 }

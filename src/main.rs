@@ -114,20 +114,7 @@ impl Client {
             .await
             .context(&format!("Client {}", self.addr));
         if let Err(error) = res {
-            eprintln!("[ERROR] {}", error);
-            if let Some(cause) = error.source() {
-                eprintln!();
-                eprintln!("Caused by:");
-                let mut cause = Some(cause);
-                loop {
-                    if let Some(err) = cause {
-                        eprintln!("  {err}");
-                        cause = err.source();
-                    } else {
-                        break;
-                    }
-                }
-            }
+            eprintln!("[ERROR] {}", error.with_trace());
         }
     }
 
@@ -269,7 +256,9 @@ async fn main() -> anyhow::Result<()> {
 
     let mut store = DataStore::new(config);
     eprintln!("Trying to read data from persistent store");
-    store.load_from_rdb().await?;
+    if let Err(err) = store.load_from_rdb().await {
+        eprintln!("Error reading from storage: {}", err.with_trace());
+    }
 
     loop {
         let (stream, addr) = listener.accept().await?;
