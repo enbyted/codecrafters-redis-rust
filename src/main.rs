@@ -137,11 +137,11 @@ impl Client {
     }
 
     async fn handle_config_get(&mut self, mut args: impl Iterator<Item = String>) -> Result<()> {
-        let key = args.next().ok_or(Error::MissingArgument("config get", "key"))?;
+        let key = args.next().ok_or(Error::MissingArgument("config get", "key"))?.to_ascii_lowercase();
 
         self.store
-            .get_config(&key.to_ascii_lowercase())
-            .map_or(Type::NullString, |s| Type::BulkString(s.into()))
+            .get_config(&key)
+            .map_or(Type::NullString, |s| Type::Array(vec![Type::BulkString(key), Type::BulkString(s.into())]))
             .write(&mut self.stream)
             .await
     }
