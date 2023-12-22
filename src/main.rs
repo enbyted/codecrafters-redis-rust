@@ -5,6 +5,7 @@ use redis_starter_rust::{rdb, Result};
 use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{env, io, path};
@@ -36,7 +37,9 @@ impl DataStore {
         match (self.config.get("dir"), self.config.get("dbfilename")) {
             (Some(dir), Some(file)) => {
                 let path = path::Path::new(dir).join(file);
-                let data = fs::read(path).await?;
+                let data = Self::read_file(&path)
+                    .await
+                    .context(format!("File path {path:?}").as_str())?;
 
                 let parsed = rdb::Database::parse(&data)?;
                 todo!()
@@ -46,6 +49,10 @@ impl DataStore {
             (None, None) => eprintln!("Not loading database, `dir` and `dbfilename` not provided"),
         }
         Ok(())
+    }
+
+    async fn read_file(path: &PathBuf) -> Result<Vec<u8>> {
+        Ok(fs::read(path).await?)
     }
 
     pub async fn set(

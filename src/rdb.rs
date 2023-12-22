@@ -22,12 +22,16 @@ impl Database {
     }
 }
 
+// Temporarily silence warnings
+#[allow(dead_code)]
 #[derive(Debug)]
 enum Value<'a> {
     String(&'a str),
     Integer(i64),
 }
 
+// Temporarily silence warnings
+#[allow(dead_code)]
 #[derive(Debug)]
 enum Section<'a> {
     EndOfFile,
@@ -62,27 +66,27 @@ impl Section<'_> {
     }
 
     fn parse_select_db(data: &[u8]) -> ParseResult<'_, Self> {
-        let (data, _) = bytes::tag([0xFEu8])(data)?;
+        let (_data, _) = bytes::tag([0xFEu8])(data)?;
         todo!()
     }
 
     fn parse_expire_time(data: &[u8]) -> ParseResult<'_, Self> {
-        let (data, _) = bytes::tag([0xFDu8])(data)?;
+        let (_data, _) = bytes::tag([0xFDu8])(data)?;
         todo!()
     }
 
     fn parse_expire_time_ms(data: &[u8]) -> ParseResult<'_, Self> {
-        let (data, _) = bytes::tag([0xFCu8])(data)?;
+        let (_data, _) = bytes::tag([0xFCu8])(data)?;
         todo!()
     }
 
     fn parse_resize_db(data: &[u8]) -> ParseResult<'_, Self> {
-        let (data, _) = bytes::tag([0xFBu8])(data)?;
+        let (_data, _) = bytes::tag([0xFBu8])(data)?;
         todo!()
     }
 
     fn parse_aux(data: &[u8]) -> ParseResult<'_, Self> {
-        let (data, _) = bytes::tag([0xFAu8])(data)?;
+        let (_data, _) = bytes::tag([0xFAu8])(data)?;
         todo!()
     }
 }
