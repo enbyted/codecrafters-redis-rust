@@ -40,6 +40,7 @@ impl DataStore {
                 let data = Self::read_file(&path)
                     .await
                     .context(format!("File path {path:?}").as_str())?;
+                eprintln!("RDB file data: {data:?}");
 
                 let parsed = rdb::Database::parse(&data)?;
 
