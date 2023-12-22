@@ -16,8 +16,9 @@ pub struct Database {}
 impl Database {
     pub fn parse(data: &[u8]) -> Result<Self> {
         let sections = Self::parse_sections(data).context("Parsing RDB file")?;
-        eprintln!("Parsed sections: {sections:?}");
-        todo!()
+        eprintln!("Parsed sections: {sections:?} in file {data:?}");
+
+        Ok(Self {})
     }
 
     fn parse_sections(data: &[u8]) -> Result<Vec<Section>> {
