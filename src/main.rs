@@ -3,6 +3,7 @@ use redis_starter_rust::error::{Error, WithContext};
 use redis_starter_rust::resp::Type;
 use redis_starter_rust::Result;
 use std::collections::HashMap;
+use std::env;
 use std::error::Error as StdError;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -18,11 +19,17 @@ struct DataValue {
 }
 
 #[derive(Debug, Clone)]
-struct DataStore(Arc<Mutex<HashMap<String, DataValue>>>);
+struct DataStore{
+    data: Arc<Mutex<HashMap<String, DataValue>>>,
+    config: Arc<HashMap<String, String>>,
+}
 
 impl DataStore {
-    pub fn new() -> Self {
-        Self(Arc::new(Mutex::new(HashMap::new())))
+    pub fn new(config: HashMap<String, String>) -> Self {
+        Self{
+            data: Arc::new(Mutex::new(HashMap::new())),
+            config: Arc::new(config),
+        }
     }
 
     pub async fn set(
@@ -33,7 +40,7 @@ impl DataStore {
     ) -> Option<String> {
         let now = SystemTime::now();
 
-        self.0
+        self.data
             .clone()
             .lock_owned()
             .await
@@ -47,7 +54,7 @@ impl DataStore {
     pub async fn get(&self, key: &str) -> Option<String> {
         let now = SystemTime::now();
 
-        self.0
+        self.data
             .lock()
             .await
             .get(key)
@@ -55,6 +62,10 @@ impl DataStore {
                 Some(expires_at) if expires_at <= now => None,
                 _ => Some(v.value.clone()),
             })
+    }
+
+    pub fn get_config(&self, key: &str) -> Option<&str> {
+        self.config.get(key).map(|s| s.as_str())
     }
 }
 
@@ -103,16 +114,36 @@ impl Client {
             eprintln!("Received CMD: {:?}", &cmd);
 
             let mut args = cmd.into_iter();
-            let cmd = args.next();
+            let cmd = args.next().map(|s| s.to_ascii_lowercase());
             match cmd.as_ref().map(|s| s.as_str()) {
                 Some("ping") => self.handle_ping(args).await?,
                 Some("echo") => self.handle_echo(args).await?,
                 Some("get") => self.handle_get(args).await?,
                 Some("set") => self.handle_set(args).await?,
+                Some("config") => self.handle_config(args).await?,
                 Some(cmd) => return Err(Error::UnimplementedCommand(cmd.into())),
                 None => todo!(),
             }
         }
+    }
+
+    async fn handle_config(&mut self, mut args: impl Iterator<Item = String>) -> Result<()> {
+        let subcmd = args.next().map(|s| s.to_ascii_lowercase());
+        match subcmd.as_ref().map(|v| v.as_str()) {
+            Some("get") => self.handle_config_get(args).await,
+            Some(cmd) => Err(Error::UnimplementedCommand(format!("CONFIG {cmd}"))),
+            None => todo!(),
+        }
+    }
+
+    async fn handle_config_get(&mut self, mut args: impl Iterator<Item = String>) -> Result<()> {
+        let key = args.next().ok_or(Error::MissingArgument("config get", "key"))?;
+
+        self.store
+            .get_config(&key.to_ascii_lowercase())
+            .map_or(Type::NullString, |s| Type::BulkString(s.into()))
+            .write(&mut self.stream)
+            .await
     }
 
     async fn handle_get(&mut self, mut args: impl Iterator<Item = String>) -> Result<()> {
@@ -172,8 +203,8 @@ impl Client {
             let ret = cmds
                 .into_iter()
                 .map(|c| match c {
-                    Type::BulkString(str) => Ok(str.to_ascii_lowercase()),
-                    Type::SimpleString(str) => Ok(str.to_ascii_lowercase()),
+                    Type::BulkString(str) => Ok(str),
+                    Type::SimpleString(str) => Ok(str),
                     other => Err(Error::UnexpectedCommandType(other)),
                 })
                 .collect::<Result<_>>()
@@ -188,12 +219,27 @@ impl Client {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let mut config = HashMap::new();
+    let args : Vec<_> = env::args().skip(1).collect();
+
+    for val in args.chunks_exact(2) {
+        let key = &val[0];
+        let value = val[1].trim();
+        if ! key.starts_with("--") {
+            eprintln!("Invalid config option {key}");
+            anyhow::bail!("Arugment parsing failed");
+        }
+        let key = key[2..].trim();
+        eprintln!("Config '{key}' = '{value}'");
+        config.insert(key.into(), value.into());
+    }
+
     let address = "127.0.0.1:6379";
 
     let listener = TcpListener::bind(address).await?;
     eprintln!("Listening on {address}");
 
-    let store = DataStore::new();
+    let store = DataStore::new(config);
 
     loop {
         let (stream, addr) = listener.accept().await?;
