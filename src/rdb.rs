@@ -354,4 +354,20 @@ mod test {
             Some(&OwnedValue::String("grape".into()))
         );
     }
+
+    #[test]
+    fn test_another_parse() {
+        let data = vec![
+            82, 69, 68, 73, 83, 48, 48, 48, 51, 250, 9, 114, 101, 100, 105, 115, 45, 118, 101, 114,
+            5, 55, 46, 50, 46, 48, 250, 10, 114, 101, 100, 105, 115, 45, 98, 105, 116, 115, 192,
+            64, 254, 0, 251, 1, 0, 0, 9, 114, 97, 115, 112, 98, 101, 114, 114, 121, 9, 98, 108,
+            117, 101, 98, 101, 114, 114, 121, 255, 83, 196, 222, 77, 197, 84, 192, 150, 10,
+        ];
+
+        let parsed = Database::parse(&data).expect("data is valid, parsing should succeed");
+        assert_eq!(
+            parsed.keys().get("raspberry"),
+            Some(&OwnedValue::String("blueberry".into()))
+        );
+    }
 }
