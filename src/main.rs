@@ -123,6 +123,10 @@ impl DataStore {
             })
     }
 
+    pub async fn keys(&self) -> Vec<String> {
+        self.data.lock().await.keys().map(|k| k.clone()).collect()
+    }
+
     pub fn get_config(&self, key: &str) -> Option<&str> {
         self.config.get(key).map(|s| s.as_str())
     }
@@ -166,6 +170,7 @@ impl Client {
                 Some("echo") => self.handle_echo(args).await?,
                 Some("get") => self.handle_get(args).await?,
                 Some("set") => self.handle_set(args).await?,
+                Some("keys") => self.handle_keys(args).await?,
                 Some("config") => self.handle_config(args).await?,
                 Some(cmd) => return Err(Error::UnimplementedCommand(cmd.into())),
                 None => todo!(),
@@ -195,6 +200,25 @@ impl Client {
             })
             .write(&mut self.stream)
             .await
+    }
+
+    async fn handle_keys(&mut self, mut args: impl Iterator<Item = String>) -> Result<()> {
+        let key = args.next().ok_or(Error::MissingArgument("keys", "key"))?;
+        if key != "*" {
+            return Err(Error::Unimplemented).context("Only `KEYS *` is implemented");
+        }
+
+        let keys = self
+            .store
+            .keys()
+            .await
+            .into_iter()
+            .map(|k| Type::BulkString(k))
+            .collect();
+
+        Type::Array(keys).write(&mut self.stream).await?;
+
+        Ok(())
     }
 
     async fn handle_get(&mut self, mut args: impl Iterator<Item = String>) -> Result<()> {
