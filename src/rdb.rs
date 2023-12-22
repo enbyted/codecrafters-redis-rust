@@ -145,7 +145,7 @@ fn parse_length(data: &[u8]) -> ParseResult<usize> {
     )))(data)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OwnedValue {
     String(String),
     Integer(i32),
@@ -335,6 +335,8 @@ impl<'a> Section<'a> {
 
 #[cfg(test)]
 mod test {
+    use crate::rdb::OwnedValue;
+
     use super::Database;
 
     #[test]
@@ -346,6 +348,10 @@ mod test {
             19, 92, 244, 85, 210, 137, 13, 126, 10,
         ];
 
-        let _parsed = Database::parse(&data).expect("data is valid, parsing should succeed");
+        let parsed = Database::parse(&data).expect("data is valid, parsing should succeed");
+        assert_eq!(
+            parsed.keys().get("apple"),
+            Some(&OwnedValue::String("grape".into()))
+        );
     }
 }
