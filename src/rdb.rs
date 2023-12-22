@@ -309,7 +309,7 @@ impl<'a> Section<'a> {
     }
 
     fn parse_expire_time_ms(data: &'a [u8]) -> ParseResult<'a, Self> {
-        let (_data, _) = bytes::tag([0xFCu8])(data)?;
+        let (data, _) = bytes::tag([0xFCu8])(data)?;
         let (data, time_slice) = bytes::take(8usize)(data)?;
         let (data, (key, value)) = Value::parse_key_value(data)?;
 
@@ -353,6 +353,11 @@ impl<'a> Section<'a> {
 
 #[cfg(test)]
 mod test {
+    use std::{
+        ops::Add,
+        time::{Duration, SystemTime},
+    };
+
     use crate::rdb::OwnedValue;
 
     use super::Database;
@@ -416,6 +421,27 @@ mod test {
         assert_eq!(
             parsed.keys().get("orange"),
             Some(&OwnedValue::String("banana".into()))
+        );
+    }
+
+    #[test]
+    fn test_data_with_expiry() {
+        let data = vec![
+            82, 69, 68, 73, 83, 48, 48, 48, 51, 250, 9, 114, 101, 100, 105, 115, 45, 118, 101, 114,
+            5, 55, 46, 50, 46, 48, 250, 10, 114, 101, 100, 105, 115, 45, 98, 105, 116, 115, 192,
+            64, 254, 0, 251, 3, 3, 252, 0, 156, 239, 18, 126, 1, 0, 0, 0, 9, 98, 108, 117, 101, 98,
+            101, 114, 114, 121, 10, 115, 116, 114, 97, 119, 98, 101, 114, 114, 121, 252, 0, 12, 40,
+            138, 199, 1, 0, 0, 0, 6, 111, 114, 97, 110, 103, 101, 5, 97, 112, 112, 108, 101, 252,
+            0, 12, 40, 138, 199, 1, 0, 0, 0, 5, 109, 97, 110, 103, 111, 6, 98, 97, 110, 97, 110,
+            97, 255, 111, 49, 239, 245, 117, 68, 176, 98, 10,
+        ];
+        let parsed = Database::parse(&data).expect("data is valid, parsing should succeed");
+        assert_eq!(
+            parsed.expiring().get("blueberry"),
+            Some(&(
+                OwnedValue::String("strawberry".into()),
+                SystemTime::UNIX_EPOCH.add(Duration::from_millis(1640995200000))
+            ))
         );
     }
 }
