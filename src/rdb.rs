@@ -295,13 +295,31 @@ impl<'a> Section<'a> {
     }
 
     fn parse_expire_time(data: &'a [u8]) -> ParseResult<'a, Self> {
-        let (_data, _) = bytes::tag([0xFDu8])(data)?;
-        todo!()
+        let (data, _) = bytes::tag([0xFDu8])(data)?;
+        let (data, time_slice) = bytes::take(4usize)(data)?;
+        let (data, (key, value)) = Value::parse_key_value(data)?;
+
+        let time = u32::from_le_bytes(
+            time_slice
+                .try_into()
+                .expect("We took 4 bytes, so this should be OK"),
+        );
+
+        Ok((data, Self::ExpireTime { time, key, value }))
     }
 
     fn parse_expire_time_ms(data: &'a [u8]) -> ParseResult<'a, Self> {
         let (_data, _) = bytes::tag([0xFCu8])(data)?;
-        todo!()
+        let (data, time_slice) = bytes::take(8usize)(data)?;
+        let (data, (key, value)) = Value::parse_key_value(data)?;
+
+        let time = u64::from_le_bytes(
+            time_slice
+                .try_into()
+                .expect("We took 8 bytes, so this should be OK"),
+        );
+
+        Ok((data, Self::ExpireTimeMs { time, key, value }))
     }
 
     fn parse_resize_db(data: &'a [u8]) -> ParseResult<'a, Self> {
