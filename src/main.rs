@@ -42,7 +42,43 @@ impl DataStore {
                     .context(format!("File path {path:?}").as_str())?;
 
                 let parsed = rdb::Database::parse(&data)?;
-                todo!()
+
+                let mut data = self.data.lock().await;
+                for (key, value) in parsed.keys() {
+                    let value = match value {
+                        rdb::OwnedValue::String(s) => s.clone(),
+                        rdb::OwnedValue::Integer(v) => v.to_string(),
+                    };
+
+                    data.insert(
+                        key.clone(),
+                        DataValue {
+                            value,
+                            expires_at: None,
+                        },
+                    );
+                }
+                let now = SystemTime::now();
+                for (key, (value, expires_at)) in parsed.expiring() {
+                    let expires_at = expires_at.clone();
+
+                    if expires_at < now {
+                        continue;
+                    }
+
+                    let value = match value {
+                        rdb::OwnedValue::String(s) => s.clone(),
+                        rdb::OwnedValue::Integer(v) => v.to_string(),
+                    };
+
+                    data.insert(
+                        key.clone(),
+                        DataValue {
+                            value,
+                            expires_at: Some(expires_at),
+                        },
+                    );
+                }
             }
             (Some(_), None) => eprintln!("Not loading database, `dbfilename` not provided"),
             (None, Some(_)) => eprintln!("Not loading database, `dir` not provided"),

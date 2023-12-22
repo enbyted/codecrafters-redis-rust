@@ -33,6 +33,8 @@ pub enum Error {
 
     #[error("Parse error {0:?}")]
     ParseError(nom::Err<nom::error::Error<Vec<u8>>>),
+    #[error("Parse error {0:?}")]
+    VerboseParseError(nom::Err<nom::error::VerboseError<Vec<u8>>>),
 }
 
 impl Error {
@@ -53,6 +55,30 @@ impl From<nom::Err<nom::error::Error<&[u8]>>> for Error {
                 err.input.to_vec(),
                 err.code,
             ))),
+        }
+    }
+}
+
+fn to_owned_verbose_error(
+    error: &(&[u8], nom::error::VerboseErrorKind),
+) -> (Vec<u8>, nom::error::VerboseErrorKind) {
+    (error.0.to_vec(), error.1.clone())
+}
+
+impl From<nom::Err<nom::error::VerboseError<&[u8]>>> for Error {
+    fn from(value: nom::Err<nom::error::VerboseError<&[u8]>>) -> Self {
+        match value {
+            nom::Err::Incomplete(needed) => Self::VerboseParseError(nom::Err::Incomplete(needed)),
+            nom::Err::Error(err) => {
+                Self::VerboseParseError(nom::Err::Error(nom::error::VerboseError {
+                    errors: err.errors.iter().map(to_owned_verbose_error).collect(),
+                }))
+            }
+            nom::Err::Failure(err) => {
+                Self::VerboseParseError(nom::Err::Failure(nom::error::VerboseError {
+                    errors: err.errors.iter().map(to_owned_verbose_error).collect(),
+                }))
+            }
         }
     }
 }
