@@ -3,10 +3,12 @@ use std::{future::Future, pin::Pin};
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
+use crate::error::ErrorKind;
 use crate::{error::Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
+    SimpleError(ErrorKind, String),
     SimpleString(String),
     BulkString(String),
     NullString,
@@ -133,6 +135,9 @@ impl Type {
 
     async fn write_impl(&self, stream: &mut PinnedWrite<'_>) -> Result<()> {
         match self {
+            Type::SimpleError(kind, message) => {
+                Self::write_simple_error(stream, kind, &message).await
+            }
             Type::SimpleString(str) => Self::write_simple_string(stream, &str).await,
             Type::BulkString(str) => Self::write_bulk_string(stream, str).await,
             Type::Array(items) => Self::write_array(stream, items).await,
@@ -140,6 +145,21 @@ impl Type {
             Type::NullArray => Ok(stream.write_all(b"*-1\r\n").await?),
             Type::Null => Ok(stream.write_all(b"_\r\n").await?),
         }
+    }
+
+    async fn write_simple_error(
+        stream: &mut PinnedWrite<'_>,
+        kind: &ErrorKind,
+        message: &str,
+    ) -> Result<()> {
+        // TODO: Check that the string does not contain any CR or LF
+        stream.write_u8(b'-').await?;
+        stream.write_all(kind.to_string().as_bytes()).await?;
+        stream.write_u8(b' ').await?;
+        stream.write_all(message.as_bytes()).await?;
+        stream.write_all(b"\r\n").await?;
+
+        Ok(())
     }
 
     async fn write_simple_string(stream: &mut PinnedWrite<'_>, value: &str) -> Result<()> {

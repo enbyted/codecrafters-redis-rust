@@ -49,17 +49,34 @@ pub enum Error {
     ItemIdParseError(#[from] ItemIdParseError),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ErrorKind {
+    Generic,
+}
+
+impl Display for ErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Generic => write!(f, "ERR"),
+        }
+    }
+}
+
 impl Error {
     pub fn with_trace(&self) -> PrintTrace<'_> {
         PrintTrace(self)
     }
 
-    pub fn to_redis_error(&self, cmd: &str) -> String {
+    pub fn kind(&self) -> ErrorKind {
+        ErrorKind::Generic
+    }
+
+    pub fn redis_error_message(&self, cmd: &str) -> String {
         match self {
             Self::StreamInsertError(InsertionError::IdIsNotGreaterThanHighestStored(_)) => format!(
-                "ERR The ID specified in {cmd} is equal or smaller than the target stream top item"
+                "The ID specified in {cmd} is equal or smaller than the target stream top item"
             ),
-            other => format!("ERR Internal Error in {cmd}: {other}"),
+            other => format!("Internal Error in {cmd}: {other}"),
         }
     }
 

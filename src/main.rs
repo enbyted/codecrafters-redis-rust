@@ -217,7 +217,7 @@ impl Client {
                 if err.is_fatal() {
                     return Err(err);
                 } else {
-                    Type::SimpleString(err.to_redis_error(&command))
+                    Type::SimpleError(err.kind(), err.redis_error_message(&command))
                         .write(&mut self.stream)
                         .await?;
                 }
