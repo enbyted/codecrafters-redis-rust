@@ -4,6 +4,7 @@ use std::{future::Future, pin::Pin};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::error::ErrorKind;
+use crate::stream;
 use crate::{error::Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -196,6 +197,26 @@ impl Type {
             Ok(())
         }
         .boxed()
+    }
+}
+
+impl From<stream::Item<'_>> for Type {
+    fn from(value: stream::Item) -> Self {
+        let fields_array = value
+            .elements
+            .iter()
+            .flat_map(|(key, value)| {
+                [
+                    Self::BulkString(key.clone()),
+                    Self::BulkString(value.clone()),
+                ]
+            })
+            .collect();
+
+        Self::Array(vec![
+            Self::BulkString(value.id.to_string()),
+            Self::Array(fields_array),
+        ])
     }
 }
 

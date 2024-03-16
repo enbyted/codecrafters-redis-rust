@@ -28,6 +28,13 @@ impl Value {
         }
     }
 
+    pub fn as_stream(&self) -> Option<&Stream> {
+        match self {
+            Value::Stream(value) => Some(value),
+            _ => None,
+        }
+    }
+
     pub fn as_stream_mut(&mut self) -> Option<&mut Stream> {
         match self {
             Value::Stream(value) => Some(value),
@@ -134,7 +141,7 @@ impl DataStore {
             })
     }
 
-    pub async fn get(&self, key: &str) -> Option<Value> {
+    pub async fn get_ref<T>(&self, key: &str, op: impl FnOnce(&Value) -> T) -> Option<T> {
         let now = SystemTime::now();
 
         self.data
@@ -143,8 +150,12 @@ impl DataStore {
             .get(key)
             .and_then(|v| match v.expires_at {
                 Some(expires_at) if expires_at <= now => None,
-                _ => Some(v.value.clone()),
+                _ => Some(op(&v.value)),
             })
+    }
+
+    pub async fn get(&self, key: &str) -> Option<Value> {
+        self.get_ref(key, |v| v.clone()).await
     }
 
     pub async fn insert_stream_item(
@@ -236,6 +247,7 @@ impl Client {
             Some("type") => self.handle_type(args).await?,
             Some("set") => self.handle_set(args).await?,
             Some("xadd") => self.handle_xadd(args).await?,
+            Some("xrange") => self.handle_xrange(args).await?,
             Some("keys") => self.handle_keys(args).await?,
             Some("config") => self.handle_config(args).await?,
             Some(cmd) => return Err(Error::UnimplementedCommand(cmd.into())),
@@ -350,6 +362,33 @@ impl Client {
             .insert_stream_item(key, id.as_str().try_into()?, items)
             .await?;
         Type::SimpleString(id.to_string())
+            .write(&mut self.stream)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn handle_xrange(&mut self, mut args: impl Iterator<Item = String>) -> Result<()> {
+        let key = args.next().ok_or(Error::MissingArgument("xrange", "key"))?;
+        let start = args
+            .next()
+            .ok_or(Error::MissingArgument("xrange", "start"))?;
+        let end = args.next().ok_or(Error::MissingArgument("xrange", "end"))?;
+
+        let start = start.as_str().try_into()?;
+        let end = end.as_str().try_into()?;
+
+        self.store
+            .get_ref(&key, move |value| -> Result<_> {
+                let value = value
+                    .as_stream()
+                    .ok_or(Error::ExpectedOtherType("stream"))?;
+
+                let range = value.range(start, end).map(|v| v.into()).collect();
+                Ok(Type::Array(range))
+            })
+            .await
+            .unwrap_or(Ok(Type::NullArray))?
             .write(&mut self.stream)
             .await?;
 

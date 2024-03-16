@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     num::{ParseIntError, TryFromIntError},
+    ops::Bound,
     time::{SystemTime, SystemTimeError, UNIX_EPOCH},
 };
 
@@ -147,18 +148,9 @@ impl TryFrom<&str> for ItemId {
 pub type ItemData = HashMap<String, String>;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Item {
-    id: ItemId,
-    elements: ItemData,
-}
-
-impl Item {
-    pub fn new(id: ItemId) -> Self {
-        Self {
-            id,
-            elements: ItemData::new(),
-        }
-    }
+pub struct Item<'a> {
+    pub(crate) id: ItemId,
+    pub(crate) elements: &'a ItemData,
 }
 
 #[derive(Debug, Clone)]
@@ -219,6 +211,14 @@ impl Stream {
         self.items.insert(id, data);
 
         Ok(id)
+    }
+
+    pub fn range(&self, start: ItemId, end: ItemId) -> impl Iterator<Item = Item<'_>> {
+        let range = self
+            .items
+            .range((Bound::Included(start), Bound::Included(end)));
+
+        range.map(|(id, elements)| Item { id: *id, elements })
     }
 }
 
