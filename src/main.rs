@@ -1,6 +1,7 @@
 use anyhow;
 use redis_starter_rust::error::{Error, WithContext};
 use redis_starter_rust::resp::Type;
+use redis_starter_rust::stream::Stream;
 use redis_starter_rust::{rdb, Result};
 use std::collections::HashMap;
 
@@ -14,8 +15,23 @@ use tokio::sync::Mutex;
 use tokio::{self, fs};
 
 #[derive(Debug, Clone)]
+enum Value {
+    String(String),
+    Stream(Stream),
+}
+
+impl Value {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Value::String(_) => "string",
+            Value::Stream(_) => "stream",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 struct DataValue {
-    value: String,
+    value: Value,
     expires_at: Option<SystemTime>,
 }
 
@@ -54,7 +70,7 @@ impl DataStore {
                     data.insert(
                         key.clone(),
                         DataValue {
-                            value,
+                            value: Value::String(value),
                             expires_at: None,
                         },
                     );
@@ -75,7 +91,7 @@ impl DataStore {
                     data.insert(
                         key.clone(),
                         DataValue {
-                            value,
+                            value: Value::String(value),
                             expires_at: Some(expires_at),
                         },
                     );
@@ -95,9 +111,9 @@ impl DataStore {
     pub async fn set(
         &self,
         key: String,
-        value: String,
+        value: Value,
         expires_at: Option<SystemTime>,
-    ) -> Option<String> {
+    ) -> Option<Value> {
         let now = SystemTime::now();
 
         self.data
@@ -111,7 +127,7 @@ impl DataStore {
             })
     }
 
-    pub async fn get(&self, key: &str) -> Option<String> {
+    pub async fn get(&self, key: &str) -> Option<Value> {
         let now = SystemTime::now();
 
         self.data
@@ -229,7 +245,10 @@ impl Client {
         self.store
             .get(&key)
             .await
-            .map_or(Type::NullString, |s| Type::BulkString(s))
+            .map_or(Ok(Type::NullString), |s| match s {
+                Value::String(x) => Ok(Type::BulkString(x)),
+                _ => Err(Error::Unimplemented),
+            })?
             .write(&mut self.stream)
             .await
     }
@@ -240,8 +259,8 @@ impl Client {
         self.store
             .get(&key)
             .await
-            .map_or(Type::SimpleString("none".into()), |_value| {
-                Type::SimpleString("string".into())
+            .map_or(Type::SimpleString("none".into()), |value| {
+                Type::SimpleString(value.kind().to_owned())
             })
             .write(&mut self.stream)
             .await
@@ -261,7 +280,7 @@ impl Client {
             _ => None,
         };
 
-        self.store.set(key, value, expires_at).await;
+        self.store.set(key, Value::String(value), expires_at).await;
         Type::SimpleString("OK".into())
             .write(&mut self.stream)
             .await
