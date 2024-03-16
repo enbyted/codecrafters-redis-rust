@@ -14,6 +14,9 @@ pub enum ItemIdParseError {
     TooManyDashes,
     #[error("'{0} is not a valid number for item id")]
     NotANumber(String, #[source] ParseIntError),
+
+    #[error("Item ID must be greater than 0-0")]
+    TooLow,
 }
 
 #[derive(Debug, Clone, Error, PartialEq)]
@@ -51,6 +54,10 @@ impl TryFrom<&str> for ItemId {
         let counter = counter
             .parse()
             .map_err(|err| ItemIdParseError::NotANumber(counter.to_string(), err))?;
+
+        if timestamp == 0 && counter == 0 {
+            return Err(ItemIdParseError::TooLow);
+        }
 
         Ok(Self(timestamp, counter))
     }
@@ -114,5 +121,6 @@ mod test {
         assert_eq!(ItemId::try_from("999-0"), Ok(ItemId(999, 0)));
         assert!(ItemId::try_from("-1").is_err());
         assert!(ItemId::try_from("0-1-").is_err());
+        assert!(ItemId::try_from("0-0").is_err());
     }
 }

@@ -28,13 +28,6 @@ impl Value {
         }
     }
 
-    pub fn as_string(&self) -> Option<&str> {
-        match self {
-            Value::String(v) => Some(v),
-            _ => None,
-        }
-    }
-
     pub fn as_stream_mut(&mut self) -> Option<&mut Stream> {
         match self {
             Value::Stream(value) => Some(value),
