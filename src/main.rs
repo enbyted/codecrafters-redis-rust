@@ -170,6 +170,7 @@ impl Client {
                 Some("ping") => self.handle_ping(args).await?,
                 Some("echo") => self.handle_echo(args).await?,
                 Some("get") => self.handle_get(args).await?,
+                Some("type") => self.handle_type(args).await?,
                 Some("set") => self.handle_set(args).await?,
                 Some("keys") => self.handle_keys(args).await?,
                 Some("config") => self.handle_config(args).await?,
@@ -229,6 +230,19 @@ impl Client {
             .get(&key)
             .await
             .map_or(Type::NullString, |s| Type::BulkString(s))
+            .write(&mut self.stream)
+            .await
+    }
+
+    async fn handle_type(&mut self, mut args: impl Iterator<Item = String>) -> Result<()> {
+        let key = args.next().ok_or(Error::MissingArgument("get", "key"))?;
+
+        self.store
+            .get(&key)
+            .await
+            .map_or(Type::SimpleString("none".into()), |_value| {
+                Type::SimpleString("string".into())
+            })
             .write(&mut self.stream)
             .await
     }
