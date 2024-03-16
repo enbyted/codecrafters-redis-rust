@@ -1,7 +1,7 @@
 use anyhow;
 use redis_starter_rust::error::{Error, WithContext};
 use redis_starter_rust::resp::Type;
-use redis_starter_rust::stream::Stream;
+use redis_starter_rust::stream::{ItemData, ItemId, Stream};
 use redis_starter_rust::{rdb, Result};
 use std::collections::HashMap;
 
@@ -25,6 +25,20 @@ impl Value {
         match self {
             Value::String(_) => "string",
             Value::Stream(_) => "stream",
+        }
+    }
+
+    pub fn as_string(&self) -> Option<&str> {
+        match self {
+            Value::String(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn as_stream_mut(&mut self) -> Option<&mut Stream> {
+        match self {
+            Value::Stream(value) => Some(value),
+            _ => None,
         }
     }
 }
@@ -140,6 +154,27 @@ impl DataStore {
             })
     }
 
+    pub async fn insert_stream_item(
+        &self,
+        key: String,
+        id: Option<ItemId>,
+        data: ItemData,
+    ) -> Result<ItemId> {
+        Ok(self
+            .data
+            .lock()
+            .await
+            .entry(key)
+            .or_insert_with(|| DataValue {
+                value: Value::Stream(Stream::new()),
+                expires_at: None,
+            })
+            .value
+            .as_stream_mut()
+            .ok_or(Error::ExpectedOtherType("stream"))?
+            .insert(id, data)?)
+    }
+
     pub async fn keys(&self) -> Vec<String> {
         self.data.lock().await.keys().map(|k| k.clone()).collect()
     }
@@ -188,6 +223,7 @@ impl Client {
                 Some("get") => self.handle_get(args).await?,
                 Some("type") => self.handle_type(args).await?,
                 Some("set") => self.handle_set(args).await?,
+                Some("xadd") => self.handle_xadd(args).await?,
                 Some("keys") => self.handle_keys(args).await?,
                 Some("config") => self.handle_config(args).await?,
                 Some(cmd) => return Err(Error::UnimplementedCommand(cmd.into())),
@@ -284,6 +320,30 @@ impl Client {
         Type::SimpleString("OK".into())
             .write(&mut self.stream)
             .await
+    }
+
+    async fn handle_xadd(&mut self, mut args: impl Iterator<Item = String>) -> Result<()> {
+        let key = args.next().ok_or(Error::MissingArgument("xadd", "key"))?;
+        let id = args.next().ok_or(Error::MissingArgument("xadd", "id"))?;
+        let mut items = HashMap::new();
+
+        let id = if id == "*" {
+            None
+        } else {
+            Some(ItemId::try_from(id.as_str())?)
+        };
+
+        while let Some(key) = args.next() {
+            let value = args.next().ok_or(Error::MissingArgument("xadd", "value"))?;
+            items.insert(key, value);
+        }
+
+        let id = self.store.insert_stream_item(key, id, items).await?;
+        Type::SimpleString(id.to_string())
+            .write(&mut self.stream)
+            .await?;
+
+        Ok(())
     }
 
     async fn handle_echo(&mut self, mut args: impl Iterator<Item = String>) -> Result<()> {

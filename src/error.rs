@@ -2,7 +2,10 @@ use std::{fmt::Display, num::ParseIntError, str::Utf8Error};
 
 use thiserror::{self, Error};
 
-use crate::resp::Type;
+use crate::{
+    resp::Type,
+    stream::{InsertionError, ItemIdParseError},
+};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -35,6 +38,15 @@ pub enum Error {
     ParseError(nom::Err<nom::error::Error<Vec<u8>>>),
     #[error("Parse error {0:?}")]
     VerboseParseError(nom::Err<nom::error::VerboseError<Vec<u8>>>),
+
+    #[error("Expected '{0}', but got something else")]
+    ExpectedOtherType(&'static str),
+
+    #[error("Failed to insert into stream: {0}")]
+    StreamInsertError(#[from] InsertionError),
+
+    #[error("Failed to parse item id: {0}")]
+    ItemIdParseError(#[from] ItemIdParseError),
 }
 
 impl Error {

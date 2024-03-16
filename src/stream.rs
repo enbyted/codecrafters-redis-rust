@@ -56,7 +56,7 @@ impl TryFrom<&str> for ItemId {
     }
 }
 
-type ItemData = HashMap<String, String>;
+pub type ItemData = HashMap<String, String>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Item {
