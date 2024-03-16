@@ -1,7 +1,7 @@
 use anyhow;
 use redis_starter_rust::error::{Error, WithContext};
 use redis_starter_rust::resp::Type;
-use redis_starter_rust::stream::{ItemData, ItemId, Stream};
+use redis_starter_rust::stream::{ItemData, ItemId, ProvidedItemId, Stream};
 use redis_starter_rust::{rdb, Result};
 use std::collections::HashMap;
 
@@ -150,7 +150,7 @@ impl DataStore {
     pub async fn insert_stream_item(
         &self,
         key: String,
-        id: Option<ItemId>,
+        id: ProvidedItemId,
         data: ItemData,
     ) -> Result<ItemId> {
         Ok(self
@@ -340,18 +340,15 @@ impl Client {
         let id = args.next().ok_or(Error::MissingArgument("xadd", "id"))?;
         let mut items = HashMap::new();
 
-        let id = if id == "*" {
-            None
-        } else {
-            Some(ItemId::try_from(id.as_str())?)
-        };
-
         while let Some(key) = args.next() {
             let value = args.next().ok_or(Error::MissingArgument("xadd", "value"))?;
             items.insert(key, value);
         }
 
-        let id = self.store.insert_stream_item(key, id, items).await?;
+        let id = self
+            .store
+            .insert_stream_item(key, id.as_str().try_into()?, items)
+            .await?;
         Type::SimpleString(id.to_string())
             .write(&mut self.stream)
             .await?;
