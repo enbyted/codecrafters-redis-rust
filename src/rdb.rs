@@ -174,7 +174,6 @@ impl<'a> Value<'a> {
         let key = match key {
             Value::String(v) => Cow::Borrowed(v),
             Value::Integer(v) => Cow::Owned(v.to_string()),
-            _ => unreachable!(),
         };
         Ok((data, key))
     }

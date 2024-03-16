@@ -3,12 +3,12 @@ use redis_starter_rust::error::{Error, WithContext};
 use redis_starter_rust::resp::Type;
 use redis_starter_rust::{rdb, Result};
 use std::collections::HashMap;
-use std::error::Error as StdError;
+
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use std::{env, io, path};
+use std::{env, path};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tokio::{self, fs};
