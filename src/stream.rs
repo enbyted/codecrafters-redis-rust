@@ -163,7 +163,7 @@ impl Stream {
                         ItemId(timestamp, 0)
                     }
                 } else {
-                    ItemId(timestamp, 0)
+                    ItemId(timestamp, if timestamp == 0 { 1 } else { 0 })
                 }
             }
             ProvidedItemId::ExplicitId(id) => {
@@ -196,11 +196,21 @@ mod test {
     }
 
     #[test]
+    fn id_generation_zero_ts() {
+        let mut sut = Stream::new();
+
+        assert_eq!(
+            sut.insert("0-*".try_into().unwrap(), ItemData::new()),
+            Ok("0-1".try_into().unwrap())
+        );
+    }
+
+    #[test]
     fn id_generation() {
         let mut sut = Stream::new();
 
         assert_eq!(
-            sut.insert("2-0".try_into().unwrap(), ItemData::new()),
+            sut.insert("2-*".try_into().unwrap(), ItemData::new()),
             Ok("2-0".try_into().unwrap())
         );
 
