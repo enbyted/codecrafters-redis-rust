@@ -6,6 +6,7 @@ use redis_starter_rust::{rdb, Result};
 use std::collections::HashMap;
 
 use std::net::SocketAddr;
+use std::ops::Bound;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -375,8 +376,17 @@ impl Client {
             .ok_or(Error::MissingArgument("xrange", "start"))?;
         let end = args.next().ok_or(Error::MissingArgument("xrange", "end"))?;
 
-        let start = start.as_str().try_into()?;
-        let end = end.as_str().try_into()?;
+        let start = if start == "-" {
+            Bound::Unbounded
+        } else {
+            Bound::Included(start.as_str().try_into()?)
+        };
+
+        let end = if end == "+" {
+            Bound::Unbounded
+        } else {
+            Bound::Included(end.as_str().try_into()?)
+        };
 
         self.store
             .get_ref(&key, move |value| -> Result<_> {

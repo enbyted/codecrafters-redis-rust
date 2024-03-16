@@ -213,10 +213,12 @@ impl Stream {
         Ok(id)
     }
 
-    pub fn range(&self, start: ItemId, end: ItemId) -> impl Iterator<Item = Item<'_>> {
-        let range = self
-            .items
-            .range((Bound::Included(start), Bound::Included(end)));
+    pub fn range(
+        &self,
+        start: Bound<ItemId>,
+        end: Bound<ItemId>,
+    ) -> impl Iterator<Item = Item<'_>> {
+        let range = self.items.range((start, end));
 
         range.map(|(id, elements)| Item { id: *id, elements })
     }
