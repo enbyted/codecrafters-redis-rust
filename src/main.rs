@@ -207,22 +207,42 @@ impl Client {
         loop {
             let cmd = self.read_command().await.context("Reading command")?;
             eprintln!("Received CMD: {:?}", &cmd);
+            let command = cmd
+                .first()
+                .map(|s| s.as_str())
+                .unwrap_or("")
+                .to_ascii_uppercase();
 
-            let mut args = cmd.into_iter();
-            let cmd = args.next().map(|s| s.to_ascii_lowercase());
-            match cmd.as_ref().map(|s| s.as_str()) {
-                Some("ping") => self.handle_ping(args).await?,
-                Some("echo") => self.handle_echo(args).await?,
-                Some("get") => self.handle_get(args).await?,
-                Some("type") => self.handle_type(args).await?,
-                Some("set") => self.handle_set(args).await?,
-                Some("xadd") => self.handle_xadd(args).await?,
-                Some("keys") => self.handle_keys(args).await?,
-                Some("config") => self.handle_config(args).await?,
-                Some(cmd) => return Err(Error::UnimplementedCommand(cmd.into())),
-                None => todo!(),
+            if let Err(err) = self.run_command(cmd).await {
+                if err.is_fatal() {
+                    return Err(err);
+                } else {
+                    Type::SimpleString(err.to_redis_error(&command))
+                        .write(&mut self.stream)
+                        .await?;
+                }
             }
         }
+    }
+
+    async fn run_command(&mut self, cmd: Vec<String>) -> Result<()> {
+        let mut args = cmd.into_iter();
+        let cmd = args.next().map(|s| s.to_ascii_lowercase());
+
+        match cmd.as_ref().map(|s| s.as_str()) {
+            Some("ping") => self.handle_ping(args).await?,
+            Some("echo") => self.handle_echo(args).await?,
+            Some("get") => self.handle_get(args).await?,
+            Some("type") => self.handle_type(args).await?,
+            Some("set") => self.handle_set(args).await?,
+            Some("xadd") => self.handle_xadd(args).await?,
+            Some("keys") => self.handle_keys(args).await?,
+            Some("config") => self.handle_config(args).await?,
+            Some(cmd) => return Err(Error::UnimplementedCommand(cmd.into())),
+            None => todo!(),
+        }
+
+        Ok(())
     }
 
     async fn handle_config(&mut self, mut args: impl Iterator<Item = String>) -> Result<()> {

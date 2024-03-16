@@ -53,6 +53,22 @@ impl Error {
     pub fn with_trace(&self) -> PrintTrace<'_> {
         PrintTrace(self)
     }
+
+    pub fn to_redis_error(&self, cmd: &str) -> String {
+        match self {
+            Self::StreamInsertError(InsertionError::IdIsNotGreaterThanHighestStored(_)) => format!(
+                "ERR The ID specified in {cmd} is equal or smaller than the target stream top item"
+            ),
+            other => format!("ERR Internal Error in {cmd}: {other}"),
+        }
+    }
+
+    pub fn is_fatal(&self) -> bool {
+        match self {
+            Self::AsyncIoError(_) | Self::Context(_, _) => true,
+            _ => false,
+        }
+    }
 }
 
 impl From<nom::Err<nom::error::Error<&[u8]>>> for Error {
