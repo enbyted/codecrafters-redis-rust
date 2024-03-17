@@ -99,6 +99,10 @@ impl From<ItemId> for ProvidedItemId {
 pub struct ItemId(u64, u64);
 
 impl ItemId {
+    pub fn new(timestamp: u64, sequence: u64) -> Self {
+        Self(timestamp, sequence)
+    }
+
     fn next(&self) -> Self {
         Self(self.0, self.1 + 1)
     }

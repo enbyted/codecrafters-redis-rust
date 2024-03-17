@@ -9,7 +9,7 @@ use std::net::SocketAddr;
 use std::ops::Bound;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, path};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, Mutex};
@@ -430,9 +430,17 @@ impl Client {
     async fn handle_xread(&mut self, mut args: impl Iterator<Item = String>) -> Result<()> {
         let mut streams = Vec::new();
         let mut block = None;
+        let now: u64 = SystemTime::now()
+            .duration_since(UNIX_EPOCH)?
+            .as_millis()
+            .try_into()?;
 
-        fn parse_item_id(value: &str) -> Result<ItemId> {
-            Ok(value.try_into()?)
+        fn parse_item_id(value: &str, now: u64) -> Result<ItemId> {
+            if value == "$" {
+                Ok(ItemId::new(now, 0))
+            } else {
+                Ok(value.try_into()?)
+            }
         }
 
         while let Some(arg) = args.next() {
@@ -445,7 +453,7 @@ impl Client {
 
                     let half_point = args.len() / 2;
                     for i in 0..half_point {
-                        streams.push((args[i].clone(), parse_item_id(&args[i + half_point])?));
+                        streams.push((args[i].clone(), parse_item_id(&args[i + half_point], now)?));
                     }
 
                     break;

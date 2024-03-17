@@ -1,4 +1,9 @@
-use std::{fmt::Display, num::ParseIntError, str::Utf8Error};
+use std::{
+    fmt::Display,
+    num::{ParseIntError, TryFromIntError},
+    str::Utf8Error,
+    time::SystemTimeError,
+};
 
 use thiserror::{self, Error};
 
@@ -13,6 +18,11 @@ pub enum Error {
     AsyncIoError(#[from] tokio::io::Error),
     #[error("{0}")]
     Context(String, #[source] Box<Error>),
+
+    #[error("Error during time calculation: {0}")]
+    TimeCalculation(#[from] SystemTimeError),
+    #[error("Encountered integer overflow")]
+    IntegerOverflowError(#[from] TryFromIntError),
 
     #[error("Invalid UTF-8 sequence")]
     Utf8Error(#[from] Utf8Error),
