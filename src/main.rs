@@ -414,7 +414,7 @@ impl Client {
         }
 
         while let Some(arg) = args.next() {
-            match arg.as_str() {
+            match arg.to_ascii_uppercase().as_str() {
                 "STREAMS" => {
                     let args: Vec<_> = args.collect();
                     if args.len() % 2 != 0 {
