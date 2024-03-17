@@ -495,22 +495,34 @@ impl Client {
                 self.store.notify_on_stream_insert(key, tx.clone()).await?;
             }
 
-            let timeout = tokio::time::sleep(Duration::from_millis(block));
+            if block > 0 {
+                let timeout = tokio::time::sleep(Duration::from_millis(block));
 
-            tokio::select! {
-                Some((key, id, data)) = rx.recv() => {
-                    Type::Array(vec![Type::Array(vec![
-                        Type::BulkString(key),
-                        Type::Array(vec![Item::new(id, &data).into()]),
-                    ])]).write(&mut self.stream).await?;
+                tokio::select! {
+                    Some((key, id, data)) = rx.recv() => {
+                        resp.push(Type::Array(vec![
+                            Type::BulkString(key),
+                            Type::Array(vec![Item::new(id, &data).into()]),
+                        ]));
+                    }
+                    _ = timeout => {
+                    }
                 }
-                _ = timeout => {
-                    Type::NullString.write(&mut self.stream).await?;
-                }
+            } else if let Some((key, id, data)) = rx.recv().await {
+                resp.push(Type::Array(vec![
+                    Type::BulkString(key),
+                    Type::Array(vec![Item::new(id, &data).into()]),
+                ]));
             }
-        } else {
-            Type::Array(resp).write(&mut self.stream).await?;
         }
+
+        let resp = if resp.is_empty() {
+            Type::NullString
+        } else {
+            Type::Array(resp)
+        };
+
+        resp.write(&mut self.stream).await?;
 
         Ok(())
     }
