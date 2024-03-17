@@ -6,6 +6,7 @@ use std::{
 };
 
 use thiserror::Error;
+use tokio::sync::mpsc;
 
 #[derive(Debug, Clone, Error, PartialEq)]
 #[non_exhaustive]
@@ -142,6 +143,7 @@ impl TryFrom<&str> for ItemId {
 }
 
 pub type ItemData = HashMap<String, String>;
+pub type InsertListener = mpsc::Sender<(String, ItemId, ItemData)>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Item<'a> {
@@ -149,15 +151,25 @@ pub struct Item<'a> {
     pub(crate) elements: &'a ItemData,
 }
 
+impl<'a> Item<'a> {
+    pub fn new(id: ItemId, elements: &'a ItemData) -> Self {
+        Self { id, elements }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Stream {
+    name: String,
     items: BTreeMap<ItemId, ItemData>,
+    listeners: Vec<InsertListener>,
 }
 
 impl Stream {
-    pub fn new() -> Self {
+    pub fn new(name: String) -> Self {
         Stream {
+            name,
             items: BTreeMap::new(),
+            listeners: Vec::new(),
         }
     }
 
@@ -207,7 +219,10 @@ impl Stream {
             }
         };
 
-        self.items.insert(id, data);
+        self.items.insert(id, data.clone());
+        for listener in self.listeners.drain(0..) {
+            let _ = listener.try_send((self.name.clone(), id, data.clone()));
+        }
 
         Ok(id)
     }
@@ -220,6 +235,10 @@ impl Stream {
         let range = self.items.range((start, end));
 
         range.map(|(id, elements)| Item { id: *id, elements })
+    }
+
+    pub fn notify_on_insert(&mut self, listener: InsertListener) {
+        self.listeners.push(listener);
     }
 }
 
@@ -238,7 +257,7 @@ mod test {
 
     #[test]
     fn insertion_of_0_0() {
-        let mut sut = Stream::new();
+        let mut sut = Stream::new(String::new());
 
         assert!(sut
             .insert("0-0".try_into().unwrap(), ItemData::new())
@@ -247,7 +266,7 @@ mod test {
 
     #[test]
     fn id_generation_zero_ts() {
-        let mut sut = Stream::new();
+        let mut sut = Stream::new(String::new());
 
         assert_eq!(
             sut.insert("0-*".try_into().unwrap(), ItemData::new()),
@@ -257,7 +276,7 @@ mod test {
 
     #[test]
     fn id_generation() {
-        let mut sut = Stream::new();
+        let mut sut = Stream::new(String::new());
 
         assert_eq!(
             sut.insert("2-*".try_into().unwrap(), ItemData::new()),

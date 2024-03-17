@@ -1,7 +1,7 @@
 use anyhow;
 use redis_starter_rust::error::{Error, WithContext};
 use redis_starter_rust::resp::Type;
-use redis_starter_rust::stream::{ItemData, ItemId, ProvidedItemId, Stream};
+use redis_starter_rust::stream::{InsertListener, Item, ItemData, ItemId, ProvidedItemId, Stream};
 use redis_starter_rust::{rdb, Result};
 use std::collections::HashMap;
 
@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{env, path};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
 use tokio::{self, fs};
 
 #[derive(Debug, Clone)]
@@ -169,15 +169,36 @@ impl DataStore {
             .data
             .lock()
             .await
-            .entry(key)
+            .entry(key.clone())
             .or_insert_with(|| DataValue {
-                value: Value::Stream(Stream::new()),
+                value: Value::Stream(Stream::new(key)),
                 expires_at: None,
             })
             .value
             .as_stream_mut()
             .ok_or(Error::ExpectedOtherType("stream"))?
             .insert(id, data)?)
+    }
+
+    pub async fn notify_on_stream_insert(
+        &self,
+        key: String,
+        listener: InsertListener,
+    ) -> Result<()> {
+        self.data
+            .lock()
+            .await
+            .entry(key.clone())
+            .or_insert_with(|| DataValue {
+                value: Value::Stream(Stream::new(key)),
+                expires_at: None,
+            })
+            .value
+            .as_stream_mut()
+            .ok_or(Error::ExpectedOtherType("stream"))?
+            .notify_on_insert(listener);
+
+        Ok(())
     }
 
     pub async fn keys(&self) -> Vec<String> {
@@ -443,7 +464,7 @@ impl Client {
 
         let mut resp = Vec::new();
 
-        for (key, start) in streams {
+        for (key, start) in &streams {
             let values = self
                 .store
                 .get_ref(&key, move |value| -> Result<_> {
@@ -452,7 +473,7 @@ impl Client {
                         .ok_or(Error::ExpectedOtherType("stream"))?;
 
                     let range = value
-                        .range(Bound::Excluded(start), Bound::Unbounded)
+                        .range(Bound::Excluded(*start), Bound::Unbounded)
                         .map(|v| v.into())
                         .collect();
                     Ok(Type::Array(range))
@@ -462,17 +483,34 @@ impl Client {
 
             match values {
                 Type::Array(arr) if arr.is_empty() => {}
-                values => resp.push(Type::Array(vec![Type::BulkString(key), values])),
+                values => resp.push(Type::Array(vec![Type::BulkString(key.clone()), values])),
             }
         }
 
         if resp.is_empty() && block.is_some() {
             let block = block.expect("Just check that it is some");
-            eprintln!("Would block for {block}ms");
-            return Err(Error::Unimplemented);
-        }
+            let (tx, mut rx) = mpsc::channel(1);
 
-        Type::Array(resp).write(&mut self.stream).await?;
+            for (key, _) in streams {
+                self.store.notify_on_stream_insert(key, tx.clone()).await?;
+            }
+
+            let timeout = tokio::time::sleep(Duration::from_millis(block));
+
+            tokio::select! {
+                Some((key, id, data)) = rx.recv() => {
+                    Type::Array(vec![
+                        Type::BulkString(key),
+                        Item::new(id, &data).into()
+                    ]).write(&mut self.stream).await?;
+                }
+                _ = timeout => {
+                    Type::NullString.write(&mut self.stream).await?;
+                }
+            }
+        } else {
+            Type::Array(resp).write(&mut self.stream).await?;
+        }
 
         Ok(())
     }
