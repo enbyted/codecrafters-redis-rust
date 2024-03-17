@@ -131,6 +131,7 @@ impl Type {
 
 impl Type {
     pub async fn write(&self, stream: &mut (dyn AsyncWrite + Unpin + Send)) -> Result<()> {
+        eprintln!("writing response: {self:?}");
         self.write_impl(&mut Pin::new(stream)).await
     }
 

@@ -453,8 +453,7 @@ impl Client {
                 .await
                 .unwrap_or(Ok(Type::NullArray))?;
 
-            resp.push(Type::BulkString(key));
-            resp.push(values);
+            resp.push(Type::Array(vec![Type::BulkString(key), values]));
         }
 
         Type::Array(resp).write(&mut self.stream).await?;
