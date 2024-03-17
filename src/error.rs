@@ -78,7 +78,7 @@ impl Error {
             Self::StreamInsertError(InsertionError::IdIsNotGreaterThanHighestStored(_)) => format!(
                 "The ID specified in {cmd} is equal or smaller than the target stream top item"
             ),
-            Self::ItemIdParseError(ItemIdParseError::TooLow) => {
+            Self::StreamInsertError(InsertionError::IdTooLow) => {
                 format!("The ID specified in {cmd} must be greater than 0-0")
             }
             other => format!("Internal Error in {cmd}: {other}"),

@@ -16,9 +16,6 @@ pub enum ItemIdParseError {
     TooManyDashes,
     #[error("'{0} is not a valid number for item id")]
     NotANumber(String, #[source] ParseIntError),
-
-    #[error("Item ID must be greater than 0-0")]
-    TooLow,
 }
 
 #[derive(Debug, Clone, Error)]
@@ -32,6 +29,9 @@ pub enum InsertionError {
 
     #[error("Unexpected integer overflow")]
     IntegerOverflow(#[from] TryFromIntError),
+
+    #[error("Item ID must be greater than 0-0")]
+    IdTooLow,
 }
 
 impl PartialEq for InsertionError {
@@ -113,10 +113,6 @@ impl TryFrom<(u64, u64)> for ItemId {
     type Error = ItemIdParseError;
 
     fn try_from(value: (u64, u64)) -> Result<Self, Self::Error> {
-        if value.0 == 0 && value.1 == 0 {
-            return Err(ItemIdParseError::TooLow);
-        }
-
         Ok(Self(value.0, value.1))
     }
 }
@@ -199,6 +195,9 @@ impl Stream {
                 }
             }
             ProvidedItemId::ExplicitId(id) => {
+                if id == ItemId(0, 0) {
+                    return Err(InsertionError::IdTooLow);
+                }
                 if let Some((last_key, _)) = self.items.last_key_value() {
                     if last_key >= &id {
                         return Err(InsertionError::IdIsNotGreaterThanHighestStored(*last_key));
@@ -232,9 +231,18 @@ mod test {
     fn parse_item_ids() {
         assert_eq!(ItemId::try_from("0-1"), Ok(ItemId(0, 1)));
         assert_eq!(ItemId::try_from("999-0"), Ok(ItemId(999, 0)));
+        assert_eq!(ItemId::try_from("0-0"), Ok(ItemId(0, 0)));
         assert!(ItemId::try_from("-1").is_err());
         assert!(ItemId::try_from("0-1-").is_err());
-        assert!(ItemId::try_from("0-0").is_err());
+    }
+
+    #[test]
+    fn insertion_of_0_0() {
+        let mut sut = Stream::new();
+
+        assert!(sut
+            .insert("0-0".try_into().unwrap(), ItemData::new())
+            .is_err());
     }
 
     #[test]
