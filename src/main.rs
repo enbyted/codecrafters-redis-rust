@@ -249,6 +249,7 @@ impl Client {
             Some("set") => self.handle_set(args).await?,
             Some("xadd") => self.handle_xadd(args).await?,
             Some("xrange") => self.handle_xrange(args).await?,
+            Some("xread") => self.handle_xread(args).await?,
             Some("keys") => self.handle_keys(args).await?,
             Some("config") => self.handle_config(args).await?,
             Some(cmd) => return Err(Error::UnimplementedCommand(cmd.into())),
@@ -401,6 +402,61 @@ impl Client {
             .unwrap_or(Ok(Type::NullArray))?
             .write(&mut self.stream)
             .await?;
+
+        Ok(())
+    }
+
+    async fn handle_xread(&mut self, mut args: impl Iterator<Item = String>) -> Result<()> {
+        let mut streams = Vec::new();
+
+        fn parse_item_id(value: &str) -> Result<ItemId> {
+            Ok(value.try_into()?)
+        }
+
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "STREAMS" => {
+                    let args: Vec<_> = args.collect();
+                    if args.len() % 2 != 0 {
+                        return Err(Error::MissingArgument("xread", "item_id"));
+                    }
+
+                    let half_point = args.len() / 2;
+                    for i in 0..half_point {
+                        streams.push((args[i].clone(), parse_item_id(&args[i + half_point])?));
+                    }
+                    todo!()
+                }
+                _ => {
+                    return Err(Error::UnexpectedArgument(arg));
+                }
+            }
+        }
+
+        let mut resp = Vec::new();
+
+        for (key, start) in streams {
+            let values = self
+                .store
+                .get_ref(&key, move |value| -> Result<_> {
+                    let value = value
+                        .as_stream()
+                        .ok_or(Error::ExpectedOtherType("stream"))?;
+
+                    let range = value
+                        .range(Bound::Excluded(start), Bound::Unbounded)
+                        .map(|v| v.into())
+                        .collect();
+                    Ok(Type::Array(range))
+                })
+                .await
+                .unwrap_or(Ok(Type::NullArray))?;
+
+            resp.push(Type::BulkString(key));
+            resp.push(values);
+        }
+
+        Type::Array(resp).write(&mut self.stream).await?;
 
         Ok(())
     }

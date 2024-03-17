@@ -33,6 +33,8 @@ pub enum Error {
 
     #[error("Missing argument {1} in {0} command")]
     MissingArgument(&'static str, &'static str),
+    #[error("Unexpected argument '{0}'")]
+    UnexpectedArgument(String),
 
     #[error("Parse error {0:?}")]
     ParseError(nom::Err<nom::error::Error<Vec<u8>>>),
