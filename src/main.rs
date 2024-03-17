@@ -425,7 +425,8 @@ impl Client {
                     for i in 0..half_point {
                         streams.push((args[i].clone(), parse_item_id(&args[i + half_point])?));
                     }
-                    todo!()
+
+                    break;
                 }
                 _ => {
                     return Err(Error::UnexpectedArgument(arg));
