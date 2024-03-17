@@ -399,7 +399,7 @@ impl Client {
                 Ok(Type::Array(range))
             })
             .await
-            .unwrap_or(Ok(Type::NullArray))?
+            .unwrap_or(Ok(Type::NullString))?
             .write(&mut self.stream)
             .await?;
 
@@ -408,6 +408,7 @@ impl Client {
 
     async fn handle_xread(&mut self, mut args: impl Iterator<Item = String>) -> Result<()> {
         let mut streams = Vec::new();
+        let mut block = None;
 
         fn parse_item_id(value: &str) -> Result<ItemId> {
             Ok(value.try_into()?)
@@ -427,6 +428,12 @@ impl Client {
                     }
 
                     break;
+                }
+                "BLOCK" => {
+                    let duration = args
+                        .next()
+                        .ok_or(Error::MissingArgument("xread", "block duration"))?;
+                    block = Some(u64::from_str_radix(&duration, 10)?);
                 }
                 _ => {
                     return Err(Error::UnexpectedArgument(arg));
@@ -451,9 +458,18 @@ impl Client {
                     Ok(Type::Array(range))
                 })
                 .await
-                .unwrap_or(Ok(Type::NullArray))?;
+                .unwrap_or(Ok(Type::NullString))?;
 
-            resp.push(Type::Array(vec![Type::BulkString(key), values]));
+            match values {
+                Type::Array(arr) if arr.is_empty() => {}
+                values => resp.push(Type::Array(vec![Type::BulkString(key), values])),
+            }
+        }
+
+        if resp.is_empty() && block.is_some() {
+            let block = block.expect("Just check that it is some");
+            eprintln!("Would block for {block}ms");
+            return Err(Error::Unimplemented);
         }
 
         Type::Array(resp).write(&mut self.stream).await?;
