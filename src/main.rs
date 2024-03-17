@@ -499,10 +499,10 @@ impl Client {
 
             tokio::select! {
                 Some((key, id, data)) = rx.recv() => {
-                    Type::Array(vec![
+                    Type::Array(vec![Type::Array(vec![
                         Type::BulkString(key),
-                        Item::new(id, &data).into()
-                    ]).write(&mut self.stream).await?;
+                        Type::Array(vec![Item::new(id, &data).into()]),
+                    ])]).write(&mut self.stream).await?;
                 }
                 _ = timeout => {
                     Type::NullString.write(&mut self.stream).await?;
