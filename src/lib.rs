@@ -1,3 +1,4 @@
+pub mod client;
 pub mod error;
 pub mod rdb;
 pub mod resp;
