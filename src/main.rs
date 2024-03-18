@@ -24,9 +24,13 @@ async fn main() -> anyhow::Result<()> {
         config.insert(key.into(), value.into());
     }
 
-    let address = "127.0.0.1:6379";
+    let port = config
+        .get("port")
+        .map(String::as_str)
+        .unwrap_or_else(|| "6379");
+    let address = format!("127.0.0.1:{port}");
 
-    let listener = TcpListener::bind(address).await?;
+    let listener = TcpListener::bind(&address).await?;
     eprintln!("Listening on {address}");
 
     let mut store = DataStore::new(config);
