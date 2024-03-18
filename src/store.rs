@@ -43,18 +43,50 @@ pub struct DataValue {
     expires_at: Option<SystemTime>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Role {
+    Master,
+    Slave,
+}
+
+impl core::fmt::Display for Role {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Role::Master => write!(f, "master"),
+            Role::Slave => write!(f, "slave"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Info {
+    role: Role,
+}
+
+impl Info {
+    pub fn role(&self) -> Role {
+        self.role
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DataStore {
     data: Arc<Mutex<HashMap<String, DataValue>>>,
     config: Arc<HashMap<String, String>>,
+    info: Arc<Mutex<Info>>,
 }
 
 impl DataStore {
-    pub fn new(config: HashMap<String, String>) -> Self {
+    pub fn new(config: HashMap<String, String>, role: Role) -> Self {
         Self {
             data: Arc::new(Mutex::new(HashMap::new())),
             config: Arc::new(config),
+            info: Arc::new(Mutex::new(Info { role })),
         }
+    }
+
+    pub async fn info(&self) -> Info {
+        self.info.lock().await.clone()
     }
 
     pub async fn load_from_rdb(&mut self) -> Result<()> {

@@ -1,6 +1,6 @@
 use anyhow;
 use redis_starter_rust::client::Client;
-use redis_starter_rust::store::DataStore;
+use redis_starter_rust::store::{DataStore, Role};
 use std::collections::HashMap;
 
 use std::env;
@@ -33,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind(&address).await?;
     eprintln!("Listening on {address}");
 
-    let mut store = DataStore::new(config);
+    let mut store = DataStore::new(config, Role::Master);
     eprintln!("Trying to read data from persistent store");
     if let Err(err) = store.load_from_rdb().await {
         eprintln!("Error reading from storage: {}", err.with_trace());

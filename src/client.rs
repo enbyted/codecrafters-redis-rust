@@ -78,9 +78,19 @@ impl Client {
             Some("xread") => self.handle_xread(args).await?,
             Some("keys") => self.handle_keys(args).await?,
             Some("config") => self.handle_config(args).await?,
+            Some("info") => self.handle_info(args).await?,
             Some(cmd) => return Err(Error::UnimplementedCommand(cmd.into())),
             None => todo!(),
         }
+
+        Ok(())
+    }
+
+    async fn handle_info(&mut self, _args: impl Iterator<Item = String>) -> Result<()> {
+        let info = self.store.info().await;
+        let resp = format!("role:{}", info.role());
+
+        Type::BulkString(resp).write(&mut self.stream).await?;
 
         Ok(())
     }
