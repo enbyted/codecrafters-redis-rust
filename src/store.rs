@@ -43,17 +43,17 @@ pub struct DataValue {
     expires_at: Option<SystemTime>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Role {
     Master,
-    Slave,
+    Slave(String),
 }
 
 impl core::fmt::Display for Role {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Role::Master => write!(f, "master"),
-            Role::Slave => write!(f, "slave"),
+            Role::Slave(_) => write!(f, "slave"),
         }
     }
 }
@@ -64,8 +64,8 @@ pub struct Info {
 }
 
 impl Info {
-    pub fn role(&self) -> Role {
-        self.role
+    pub fn role(&self) -> &Role {
+        &self.role
     }
 }
 
