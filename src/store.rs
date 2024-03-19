@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::time::UNIX_EPOCH;
 use std::{collections::HashMap, sync::Arc, time::SystemTime};
 
 use tokio::fs;
@@ -61,11 +62,47 @@ impl core::fmt::Display for Role {
 #[derive(Debug, Clone)]
 pub struct Info {
     role: Role,
+    replication_id: [u8; 20],
+    replication_offset: u64,
 }
 
 impl Info {
+    pub fn new(role: Role) -> Self {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let mut replication_id = [0; 20];
+        for (i, window) in now.to_le_bytes().windows(4).enumerate() {
+            let len = window.len();
+            let id_1 = replication_id[i..(i + len)]
+                .iter()
+                .zip(window)
+                .map(|(a, b)| u8::wrapping_add(*a, *b))
+                .collect::<Vec<_>>();
+            replication_id[i..(i + len)].copy_from_slice(&id_1);
+            let id_2 = replication_id[(i + len)..(i + len + len)]
+                .iter()
+                .zip(window)
+                .map(|(a, b)| u8::wrapping_add(*a, *b))
+                .collect::<Vec<_>>();
+            replication_id[(i + len)..(i + len + len)].copy_from_slice(&id_2);
+        }
+
+        Self {
+            role,
+            replication_id,
+            replication_offset: 0,
+        }
+    }
     pub fn role(&self) -> &Role {
         &self.role
+    }
+    pub fn replication_id(&self) -> &[u8; 20] {
+        &self.replication_id
+    }
+    pub fn replication_offset(&self) -> u64 {
+        self.replication_offset
     }
 }
 
@@ -81,7 +118,7 @@ impl DataStore {
         Self {
             data: Arc::new(Mutex::new(HashMap::new())),
             config: Arc::new(config),
-            info: Arc::new(Mutex::new(Info { role })),
+            info: Arc::new(Mutex::new(Info::new(role))),
         }
     }
 

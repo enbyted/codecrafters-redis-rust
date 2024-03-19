@@ -88,7 +88,12 @@ impl Client {
 
     async fn handle_info(&mut self, _args: impl Iterator<Item = String>) -> Result<()> {
         let info = self.store.info().await;
-        let resp = format!("role:{}", info.role());
+        let resp = format!(
+            "role:{}\r\nmaster_replid:{}\r\nmaster_repl_offset:{}",
+            info.role(),
+            info.replication_id().iter().fold(String::new(), |s, v| format!("{s}{v:02x}")),
+            info.replication_offset()
+        );
 
         Type::BulkString(resp).write(&mut self.stream).await?;
 
