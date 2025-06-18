@@ -59,6 +59,8 @@ pub enum Error {
 
     #[error("Failed to parse item id: {0}")]
     ItemIdParseError(#[from] ItemIdParseError),
+    #[error("Received unexpected reply: {reply:?}, expected: {expected}")]
+    UnexpectedReply { reply: Type, expected: &'static str },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

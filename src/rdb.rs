@@ -165,11 +165,11 @@ impl<'a> Value<'a> {
         }
     }
 
-    fn parse_key_value(data: &'a [u8]) -> ParseResult<(Cow<'a, str>, Value)> {
+    fn parse_key_value(data: &'a [u8]) -> ParseResult<'a, (Cow<'a, str>, Value<'a>)> {
         branch::alt((Self::parse_kv_string,))(data)
     }
 
-    fn parse_kv_key(data: &'a [u8]) -> ParseResult<Cow<'a, str>> {
+    fn parse_kv_key(data: &'a [u8]) -> ParseResult<'a, Cow<'a, str>> {
         let (data, key) = Self::parse_string(data)?;
         let key = match key {
             Value::String(v) => Cow::Borrowed(v),
@@ -178,7 +178,7 @@ impl<'a> Value<'a> {
         Ok((data, key))
     }
 
-    fn parse_kv_string(data: &'a [u8]) -> ParseResult<(Cow<'a, str>, Value)> {
+    fn parse_kv_string(data: &'a [u8]) -> ParseResult<'a, (Cow<'a, str>, Value<'a>)> {
         let (data, _) = bytes::tag([0u8])(data)?;
         let (data, key) = Self::parse_kv_key(data)?;
         let (data, value) = Self::parse_string(data)?;
@@ -186,7 +186,7 @@ impl<'a> Value<'a> {
         Ok((data, (key, value)))
     }
 
-    fn parse_string(data: &'a [u8]) -> ParseResult<Value> {
+    fn parse_string(data: &'a [u8]) -> ParseResult<'a, Value<'a>> {
         branch::alt((
             Self::parse_length_prefixed_string,
             Self::parse_int_8bit,
@@ -195,7 +195,7 @@ impl<'a> Value<'a> {
         ))(data)
     }
 
-    fn parse_length_prefixed_string(data: &'a [u8]) -> ParseResult<Self> {
+    fn parse_length_prefixed_string(data: &'a [u8]) -> ParseResult<'a, Self> {
         let (data, length) = parse_length(data)?;
         let (data, value_slice) = bytes::take(length)(data)?;
         let value = std::str::from_utf8(value_slice).map_err(|e| {

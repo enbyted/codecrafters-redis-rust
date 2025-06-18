@@ -23,8 +23,8 @@ async fn main() -> anyhow::Result<()> {
             "replicaof" => {
                 let host = args.next();
                 let port = args.next();
-                anyhow::ensure!(host.is_some(), "option '{key}' 2 arguments");
-                anyhow::ensure!(port.is_some(), "option '{key}' 2 arguments");
+                anyhow::ensure!(host.is_some(), "option '{key}' requires 2 arguments");
+                anyhow::ensure!(port.is_some(), "option '{key}' requires 2 arguments");
                 let host = host.unwrap();
                 let port = port.unwrap();
                 config.insert(key.into(), format!("{host}:{port}"));
@@ -53,9 +53,8 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let mut store = DataStore::new(config, role);
-    eprintln!("Trying to read data from persistent store");
-    if let Err(err) = store.load_from_rdb().await {
-        eprintln!("Error reading from storage: {}", err.with_trace());
+    if let Err(err) = store.init().await {
+        eprintln!("Initialization failed: {}", err.with_trace());
     }
 
     loop {

@@ -3,11 +3,15 @@ use std::time::UNIX_EPOCH;
 use std::{collections::HashMap, sync::Arc, time::SystemTime};
 
 use tokio::fs;
+use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 
 use crate::error::{Error, WithContext};
 use crate::stream::{InsertListener, ItemData, ItemId, ProvidedItemId, Stream};
 use crate::{rdb, Result};
+use master_connection::MasterConnection;
+
+mod master_connection;
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -126,7 +130,23 @@ impl DataStore {
         self.info.lock().await.clone()
     }
 
-    pub async fn load_from_rdb(&mut self) -> Result<()> {
+    pub async fn init(&mut self) -> Result<()> {
+        let role = self.info.lock().await.role().clone();
+        match role {
+            Role::Master => self.load_from_rdb().await,
+            Role::Slave(master) => self.connect_to_master(master).await,
+        }
+    }
+
+    async fn connect_to_master(&mut self, master: String) -> Result<()> {
+        let stream = TcpStream::connect(master).await?;
+        let mut connection = MasterConnection::new(stream);
+        connection.init().await?;
+        Ok(())
+    }
+
+    async fn load_from_rdb(&mut self) -> Result<()> {
+        eprintln!("Trying to read data from persistent store");
         match (self.config.get("dir"), self.config.get("dbfilename")) {
             (Some(dir), Some(file)) => {
                 let path = Path::new(dir).join(file);
