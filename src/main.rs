@@ -21,13 +21,14 @@ async fn main() -> anyhow::Result<()> {
         let key = key[2..].trim();
         match key {
             "replicaof" => {
-                let host = args.next();
-                let port = args.next();
-                anyhow::ensure!(host.is_some(), "option '{key}' requires 2 arguments");
-                anyhow::ensure!(port.is_some(), "option '{key}' requires 2 arguments");
-                let host = host.unwrap();
-                let port = port.unwrap();
-                config.insert(key.into(), format!("{host}:{port}"));
+                let master = args
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("option '{key}' requires argumnent"))?;
+                if let Some((host, port)) = master.split_once(' ') {
+                    config.insert(key.into(), format!("{host}:{port}"));
+                } else {
+                    anyhow::bail!("replicaof requires argument in format 'host port'");
+                }
             }
             _ => {
                 let value = args.next();
