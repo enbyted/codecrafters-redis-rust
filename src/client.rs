@@ -80,10 +80,26 @@ impl Client {
             Some("config") => self.handle_config(args).await?,
             Some("info") => self.handle_info(args).await?,
             Some("replconf") => self.handle_replconf(args).await?,
+            Some("psync") => self.handle_psync(args).await?,
             Some(cmd) => return Err(Error::UnimplementedCommand(cmd.into())),
             None => todo!(),
         }
 
+        Ok(())
+    }
+
+    async fn handle_psync(&mut self, mut args: impl Iterator<Item = String>) -> Result<()> {
+        let id = args.next().ok_or(Error::MissingArgument("psync", "id"))?;
+        let offset = args
+            .next()
+            .ok_or(Error::MissingArgument("psync", "offset"))?;
+        eprintln!("PSYNC {id} {offset}");
+        Type::SimpleString(format!(
+            "FULLRESYNC {} 0",
+            self.store.info().await.replication_id_str()
+        ))
+        .write(&mut self.stream)
+        .await?;
         Ok(())
     }
 
@@ -107,9 +123,7 @@ impl Client {
         let resp = format!(
             "role:{}\r\nmaster_replid:{}\r\nmaster_repl_offset:{}",
             info.role(),
-            info.replication_id()
-                .iter()
-                .fold(String::new(), |s, v| format!("{s}{v:02x}")),
+            info.replication_id_str(),
             info.replication_offset()
         );
 

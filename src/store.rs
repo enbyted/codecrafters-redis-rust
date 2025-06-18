@@ -105,6 +105,11 @@ impl Info {
     pub fn replication_id(&self) -> &[u8; 20] {
         &self.replication_id
     }
+    pub fn replication_id_str(&self) -> String {
+        self.replication_id
+            .iter()
+            .fold(String::new(), |s, v| format!("{s}{v:02x}"))
+    }
     pub fn replication_offset(&self) -> u64 {
         self.replication_offset
     }

@@ -63,6 +63,8 @@ pub enum Error {
     UnexpectedReply { reply: Type, expected: &'static str },
     #[error("Unsupported RDB version: {0}")]
     UnsupportedRdbVersion(u32),
+    #[error("Invalid PSYNC reply format: {0}")]
+    InvalidPsyncReplyFormat(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
