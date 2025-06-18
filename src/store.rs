@@ -140,7 +140,14 @@ impl DataStore {
 
     async fn connect_to_master(&mut self, master: String) -> Result<()> {
         let stream = TcpStream::connect(master).await?;
-        let mut connection = MasterConnection::new(stream);
+        let mut connection = MasterConnection::new(
+            stream,
+            self.config
+                .get("port")
+                .map(String::as_str)
+                .unwrap_or("6379")
+                .parse::<u16>()?,
+        );
         connection.init().await?;
         Ok(())
     }

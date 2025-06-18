@@ -43,6 +43,7 @@ async fn main() -> anyhow::Result<()> {
         .map(String::as_str)
         .unwrap_or_else(|| "6379");
     let address = format!("127.0.0.1:{port}");
+    config.insert("port".into(), port.into());
 
     let listener = TcpListener::bind(&address).await?;
     eprintln!("Listening on {address}");

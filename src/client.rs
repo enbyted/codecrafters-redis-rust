@@ -79,10 +79,26 @@ impl Client {
             Some("keys") => self.handle_keys(args).await?,
             Some("config") => self.handle_config(args).await?,
             Some("info") => self.handle_info(args).await?,
+            Some("replconf") => self.handle_replconf(args).await?,
             Some(cmd) => return Err(Error::UnimplementedCommand(cmd.into())),
             None => todo!(),
         }
 
+        Ok(())
+    }
+
+    async fn handle_replconf(&mut self, mut args: impl Iterator<Item = String>) -> Result<()> {
+        let key = args
+            .next()
+            .ok_or(Error::MissingArgument("replconf", "key"))?;
+        let value = args
+            .next()
+            .ok_or(Error::MissingArgument("replconf", "value"))?;
+        eprintln!("REPLCONF {key} {value}");
+        // self.store.replconf(key, value).await;
+        Type::SimpleString("OK".into())
+            .write(&mut self.stream)
+            .await?;
         Ok(())
     }
 
