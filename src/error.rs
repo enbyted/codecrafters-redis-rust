@@ -61,6 +61,8 @@ pub enum Error {
     ItemIdParseError(#[from] ItemIdParseError),
     #[error("Received unexpected reply: {reply:?}, expected: {expected}")]
     UnexpectedReply { reply: Type, expected: &'static str },
+    #[error("Unsupported RDB version: {0}")]
+    UnsupportedRdbVersion(u32),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

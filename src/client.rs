@@ -91,7 +91,9 @@ impl Client {
         let resp = format!(
             "role:{}\r\nmaster_replid:{}\r\nmaster_repl_offset:{}",
             info.role(),
-            info.replication_id().iter().fold(String::new(), |s, v| format!("{s}{v:02x}")),
+            info.replication_id()
+                .iter()
+                .fold(String::new(), |s, v| format!("{s}{v:02x}")),
             info.replication_offset()
         );
 
@@ -204,7 +206,7 @@ impl Client {
             .store
             .insert_stream_item(key, id.as_str().try_into()?, items)
             .await?;
-        Type::SimpleString(id.to_string())
+        Type::BulkString(id.to_string())
             .write(&mut self.stream)
             .await?;
 

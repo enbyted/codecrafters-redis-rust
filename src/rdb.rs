@@ -1,3 +1,4 @@
+use core::str;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ops::Add;
@@ -93,7 +94,14 @@ impl Database {
     }
 
     fn parse_sections(data: &[u8]) -> Result<Vec<Section>> {
-        let (data, _) = bytes::tag::<_, _, NomError<_>>(b"REDIS0003")(data)?;
+        let (data, _) = bytes::tag::<_, _, NomError<_>>(b"REDIS")(data)?;
+        let (data, version) = bytes::take::<_, _, NomError<_>>(4usize)(data)?;
+        let version = str::from_utf8(version).map_err(Error::Utf8Error)?;
+        let version = version.parse::<u32>().map_err(Error::PraseIntError)?;
+        if version != 3 && version != 11 {
+            return Err(Error::UnsupportedRdbVersion(version));
+        }
+        eprintln!("RDB version: {version}");
         Ok(
             multi::many_till(combinator::cut(Section::parse), Section::parse_eof)(data)?
                 .1
@@ -420,6 +428,21 @@ mod test {
         assert_eq!(
             parsed.keys().get("orange"),
             Some(&OwnedValue::String("banana".into()))
+        );
+    }
+
+    #[test]
+    fn test_version_11() {
+        let data = vec![
+            82, 69, 68, 73, 83, 48, 48, 49, 49, 250, 9, 114, 101, 100, 105, 115, 45, 118, 101, 114,
+            5, 55, 46, 50, 46, 48, 250, 10, 114, 101, 100, 105, 115, 45, 98, 105, 116, 115, 192,
+            64, 254, 0, 251, 1, 0, 0, 9, 98, 108, 117, 101, 98, 101, 114, 114, 121, 5, 103, 114,
+            97, 112, 101, 255, 165, 25, 133, 225, 24, 157, 36, 232, 10,
+        ];
+        let parsed = Database::parse(&data).expect("data is valid, parsing should succeed");
+        assert_eq!(
+            parsed.keys().get("blueberry"),
+            Some(&OwnedValue::String("grape".into()))
         );
     }
 
